@@ -1,0 +1,10 @@
+# Preview-only experiment: a single container function instead of Next.js route functions.
+# This is the official stable LobeHub image matching the repository's v2.2.20 release.
+FROM lobehub/lobehub:2.2.20
+
+# Vercel Container Runtime proxies HTTP to port 80 by default.
+ENV HOSTNAME=0.0.0.0 \
+    PORT=80 \
+    FTS_SEARCH_PROVIDER=pg_like
+
+EXPOSE 80
