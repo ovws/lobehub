@@ -49,7 +49,7 @@
       ]
     }
   ],
-  "installCommand": null,
+  "installCommand": "echo 'Dependencies are bundled in the pinned Docker image; skipping source npm install'",
   "rewrites": [
     {
       "source": "/_dangerous_local_dev_proxy",
