@@ -1,5 +1,12 @@
 {
-  "buildCommand": null,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "services": {
+    "lobehub": {
+      "root": ".",
+      "runtime": "container",
+      "entrypoint": "Dockerfile.vercel"
+    }
+  },
   "headers": [
     {
       "source": "/_spa/(.*)",
@@ -49,17 +56,12 @@
       ]
     }
   ],
-  "installCommand": "echo 'Dependencies are bundled in the pinned Docker image; skipping source npm install'",
   "rewrites": [
     {
-      "source": "/_dangerous_local_dev_proxy",
-      "destination": "/_dangerous_local_dev_proxy.html"
-    },
-    {
-      "source": "/_dangerous_local_dev_proxy/:path*",
-      "destination": "/_dangerous_local_dev_proxy.html"
+      "source": "/(.*)",
+      "destination": {
+        "service": "lobehub"
+      }
     }
-  ],
-  "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": null
+  ]
 }
