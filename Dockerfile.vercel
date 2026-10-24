@@ -7,4 +7,10 @@ ENV HOSTNAME=0.0.0.0 \
     PORT=80 \
     FTS_SEARCH_PROVIDER=pg_like
 
+# Upstream sets S3_ENDPOINT="" in the image. LobeHub validates this as an
+# optional URL, where absent is valid but an empty string is not.
+# Keep a configured endpoint intact; remove only the image's blank default.
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["if [ -z \"$S3_ENDPOINT\" ]; then unset S3_ENDPOINT; fi; exec /bin/node /app/startServer.js"]
+
 EXPOSE 80
