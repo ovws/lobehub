@@ -75,3 +75,70 @@ describe('pg_search migrations on a database without the extension', () => {
     });
   });
 });
+
+// PGlite cannot advertise pg_search or install a custom extension. Inject the database's
+// response at the CREATE EXTENSION statement while executing the real migration and handler.
+describe('pg_search advertised but installation denied', () => {
+  const migrationPath = join(migrationsFolder, '0090_enable_pg_search.sql');
+  const availabilityCheck =
+    "EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'pg_search')";
+  const installStatement = 'CREATE EXTENSION IF NOT EXISTS pg_search;';
+
+  const injectInstallError = (migration: string, code: string) => {
+    expect(migration.split(availabilityCheck)).toHaveLength(2);
+    expect(migration.split(installStatement)).toHaveLength(2);
+    return migration
+      .replace(availabilityCheck, 'TRUE')
+      .replace(
+        installStatement,
+        `RAISE EXCEPTION 'simulated extension install failure' USING ERRCODE = '${code}';`,
+      );
+  };
+
+  it('continues replay after insufficient privilege without creating BM25 indexes', async () => {
+    const { cp, mkdtemp, readFile, rm, writeFile } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const temporaryFolder = await mkdtemp(join(tmpdir(), 'pg-search-migrations-'));
+    const client = new PGlite({ extensions: { vector } });
+
+    try {
+      await cp(migrationsFolder, temporaryFolder, { recursive: true });
+      const migration = await readFile(migrationPath, 'utf8');
+      await writeFile(
+        join(temporaryFolder, '0090_enable_pg_search.sql'),
+        injectInstallError(migration, '42501'),
+      );
+      const db = drizzle({ client });
+      await migrate(db, { migrationsFolder: temporaryFolder });
+
+      const applied = await db.execute<{ count: number }>(
+        sql`SELECT count(*)::int AS count FROM drizzle.__drizzle_migrations`,
+      );
+      expect(applied.rows[0].count).toBe(readMigrationFiles({ migrationsFolder }).length);
+      const extension = await db.execute(
+        sql`SELECT 1 FROM pg_extension WHERE extname = 'pg_search'`,
+      );
+      expect(extension.rows).toHaveLength(0);
+      const indexes = await db.execute(
+        sql`SELECT indexname FROM pg_indexes WHERE indexname LIKE '%_bm25_idx'`,
+      );
+      expect(indexes.rows).toHaveLength(0);
+    } finally {
+      await client.close();
+      await rm(temporaryFolder, { force: true, recursive: true });
+    }
+  }, 30_000);
+
+  it('propagates unexpected installation errors', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const client = new PGlite();
+    try {
+      const migration = await readFile(migrationPath, 'utf8');
+      await expect(client.exec(injectInstallError(migration, '0A000'))).rejects.toMatchObject({
+        code: '0A000',
+      });
+    } finally {
+      await client.close();
+    }
+  });
+});
